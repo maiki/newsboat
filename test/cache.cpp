@@ -13,7 +13,6 @@ TEST_CASE("items in search result can be marked read", "[cache]") {
 	rss_parser parser("file://data/rss.xml", &rsscache, &cfg, nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
 	REQUIRE(feed->total_item_count() == 8);
-	rsscache.externalize_rssfeed(feed, false);
 
 	auto search_items = rsscache.search_for_items("Botox", "");
 	REQUIRE(search_items.size() == 1);
@@ -75,7 +74,6 @@ TEST_CASE("Last-Modified and ETag values are persisted to DB", "[cache]") {
 	const auto feedurl = "file://data/rss.xml";
 	rss_parser parser(feedurl, rsscache.get(), cfg.get(), nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
-	rsscache->externalize_rssfeed(feed, false);
 
 	/* We will run this lambda on different inputs to check different
 	 * situations. */
@@ -136,8 +134,6 @@ TEST_CASE("mark_all_read marks all items in the feed read", "[cache]") {
 		REQUIRE(feed->total_item_count() == feed_data.second);
 
 		test_feed->add_item(feed->items()[0]);
-
-		rsscache.externalize_rssfeed(feed, false);
 	}
 
 	SECTION("empty feedurl") {
@@ -222,7 +218,6 @@ TEST_CASE("cleanup_cache behaves as expected", "[cache]") {
 		rss_parser parser(url, rsscache.get(), cfg.get(), nullptr);
 		std::shared_ptr<rss_feed> feed = parser.parse();
 		feeds.push_back(feed);
-		rsscache->externalize_rssfeed(feed, false);
 	}
 
 	SECTION("cleanup-on-quit set to \"no\"") {
@@ -282,8 +277,6 @@ TEST_CASE("fetch_descriptions fills out feed item's descriptions", "[cache]") {
 	rss_parser parser(feedurl, &rsscache, &cfg, nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
 
-	rsscache.externalize_rssfeed(feed, false);
-
 	for (auto& item : feed->items()) {
 		item->set_description("your test failed!");
 	}
@@ -309,7 +302,6 @@ TEST_CASE("get_unread_count returns number of yet unread articles", "[cache]") {
 	// Marking one article as read to make sure get_unread_count() really
 	// counts only unread articles
 	feed->items()[0]->set_unread(false);
-	rsscache->externalize_rssfeed(feed, false);
 
 	REQUIRE(rsscache->get_unread_count() == 7);
 
@@ -323,7 +315,6 @@ TEST_CASE("get_unread_count returns number of yet unread articles", "[cache]") {
 	feed = parser->parse();
 	feed->items()[0]->set_unread(false);
 	feed->items()[2]->set_unread(false);
-	rsscache->externalize_rssfeed(feed, false);
 	REQUIRE(rsscache->get_unread_count() == 8);
 
 	// Lastly, let's make sure the info is indeed retrieved from the database
@@ -371,7 +362,6 @@ TEST_CASE("get_read_item_guids returns GUIDs of items that are marked read",
 	};
 
 	mark_read(feed->items()[0]);
-	rsscache->externalize_rssfeed(feed, false);
 
 	INFO("Testing on single feed");
 	check(rsscache->get_read_item_guids());
@@ -387,7 +377,6 @@ TEST_CASE("get_read_item_guids returns GUIDs of items that are marked read",
 	mark_read(feed->items()[0]);
 	mark_read(feed->items()[2]);
 
-	rsscache->externalize_rssfeed(feed, false);
 	INFO("Testing on two feeds");
 	check(rsscache->get_read_item_guids());
 
@@ -411,7 +400,6 @@ TEST_CASE("mark_item_deleted changes \"deleted\" flag of item with given GUID ",
 	auto item = feed->items()[1];
 	auto guid = item->guid();
 	REQUIRE(feed->total_item_count() == 8);
-	rsscache->externalize_rssfeed(feed, false);
 	rsscache->mark_item_deleted(guid, true);
 
 	rsscache.reset( new cache(dbfile.getPath(), &cfg) );
@@ -433,8 +421,6 @@ TEST_CASE("mark_items_read_by_guid marks items with given GUIDs as unread ",
 	REQUIRE(feed->unread_item_count() == 8);
 
 	SECTION("Not marking any items read") {
-		rsscache->externalize_rssfeed(feed, false);
-
 		REQUIRE_NOTHROW(rsscache->mark_items_read_by_guid({}));
 
 		rsscache.reset( new cache(dbfile.getPath(), &cfg) );
@@ -444,7 +430,6 @@ TEST_CASE("mark_items_read_by_guid marks items with given GUIDs as unread ",
 
 	SECTION("Marking two items read") {
 		auto guids = { feed->items()[0]->guid(), feed->items()[2]->guid() };
-		rsscache->externalize_rssfeed(feed, false);
 
 		REQUIRE_NOTHROW(rsscache->mark_items_read_by_guid(guids));
 
@@ -473,8 +458,6 @@ TEST_CASE("remove_old_deleted_items removes deleted items with particular "
 		feed->items()[2]->guid(),
 		feed->items()[5]->guid()
 	};
-
-	rsscache.externalize_rssfeed(feed, false);
 
 	for (const auto& guid : should_be_absent) {
 		rsscache.mark_item_deleted(guid, true);
@@ -512,9 +495,7 @@ TEST_CASE("search_for_items finds all items with matching title or content",
 	};
 	for (const auto& url : feedurls) {
 		rss_parser parser(url, &rsscache, &cfg, nullptr);
-		std::shared_ptr<rss_feed> feed = parser.parse();
-
-		rsscache.externalize_rssfeed(feed, false);
+		parser.parse();
 	}
 
 	auto query = "content";
@@ -542,7 +523,6 @@ TEST_CASE("update_rssitem_flags dumps `rss_item` object's flags to DB",
 	const auto feedurl = "file://data/rss.xml";
 	rss_parser parser(feedurl, rsscache.get(), &cfg, nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
-	rsscache->externalize_rssfeed(feed, false);
 
 	auto item = feed->items()[0];
 	item->set_flags("abc");
@@ -566,8 +546,6 @@ TEST_CASE("update_rssitem_unread_and_enqueued updates item's \"unread\" and "
 	std::shared_ptr<rss_feed> feed = parser.parse();
 
 	auto item = feed->items()[0];
-
-	rsscache->externalize_rssfeed(feed, false);
 
 	SECTION("\"unread\" field is updated") {
 		REQUIRE(item->unread());
@@ -692,21 +670,22 @@ TEST_CASE("{externalize,internalize}_rssfeed puts a feed into DB and gets it bac
 
 TEST_CASE("externalize_rssfeed doesn't store more than `max-items` items",
           "[cache]") {
-	TestHelpers::TempFile dbfile;
 	rss_ignores ign;
 	std::unique_ptr<configcontainer> cfg( new configcontainer() );
-	std::unique_ptr<cache> rsscache( new cache(dbfile.getPath(), cfg.get()) );
+	std::unique_ptr<cache> rsscache( new cache(":memory:", cfg.get()) );
+	std::unique_ptr<rss_parser> parser;
 
-	cfg->set_configvalue("max-items", "3");
 	const auto feedurl = "file://data/rss.xml";
-	rss_parser parser(feedurl, rsscache.get(), cfg.get(), nullptr);
-	auto feed = parser.parse();
+
+	parser.reset(new rss_parser(feedurl, rsscache.get(), cfg.get(), nullptr));
+	auto feed = parser->parse();
 	REQUIRE(feed->total_item_count() == 8);
-	rsscache->externalize_rssfeed(feed, false);
 
 	cfg.reset( new configcontainer() );
-	rsscache.reset( new cache(dbfile.getPath(), cfg.get()) );
-	feed = rsscache->internalize_rssfeed(feedurl, &ign);
+	cfg->set_configvalue("max-items", "3");
+	rsscache.reset( new cache(":memory:", cfg.get()) );
+	parser.reset(new rss_parser(feedurl, rsscache.get(), cfg.get(), nullptr));
+	feed = parser->parse();
 	REQUIRE(feed->total_item_count() == 3);
 }
 
@@ -777,6 +756,7 @@ TEST_CASE("externalize_rssfeed resets \"unread\" field if item's content "
 	rss_parser parser(feedurl, rsscache.get(), &cfg, nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
 	feed->items()[0]->set_unread_nowrite(false);
+	feed->items()[0]->set_override_unread(true);
 	rsscache->externalize_rssfeed(feed, false);
 
 	rsscache.reset( new cache(dbfile.getPath(), &cfg) );
@@ -810,27 +790,24 @@ TEST_CASE("externalize_rssfeed only updates \"unread\" field if override_unread 
 	auto feedurl = "file://data/rss.xml";
 	rss_parser parser(feedurl, rsscache.get(), &cfg, nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
-	feed->items()[0]->set_unread_nowrite(false);
-	rsscache->externalize_rssfeed(feed, false);
 
 	rsscache.reset( new cache(dbfile.getPath(), &cfg) );
 	feed = rsscache->internalize_rssfeed(feedurl, &ign);
-	auto item = feed->items()[0];
-	item->set_unread_nowrite(true);
+	feed->items()[0]->set_unread_nowrite(false);
 
-	SECTION("override_unread not set; item remains read") {
-		rsscache->externalize_rssfeed(feed, false);
-		rsscache.reset( new cache(dbfile.getPath(), &cfg) );
-		feed = rsscache->internalize_rssfeed(feedurl, &ign);
-		REQUIRE_FALSE(feed->items()[0]->unread());
-	}
-
-	SECTION("override_unread is set; item becomes unread") {
-		item->set_override_unread(true);
+	SECTION("override_unread not set; item remains unread") {
 		rsscache->externalize_rssfeed(feed, false);
 		rsscache.reset( new cache(dbfile.getPath(), &cfg) );
 		feed = rsscache->internalize_rssfeed(feedurl, &ign);
 		REQUIRE(feed->items()[0]->unread());
+	}
+
+	SECTION("override_unread is set; item becomes read") {
+		feed->items()[0]->set_override_unread(true);
+		rsscache->externalize_rssfeed(feed, false);
+		rsscache.reset( new cache(dbfile.getPath(), &cfg) );
+		feed = rsscache->internalize_rssfeed(feedurl, &ign);
+		REQUIRE_FALSE(feed->items()[0]->unread());
 	}
 }
 
@@ -840,7 +817,6 @@ TEST_CASE("do_vacuum doesn't throw an exception", "[cache]") {
 	std::unique_ptr<cache> rsscache( new cache(dbfile.getPath(), &cfg) );
 	rss_parser parser("file://data/rss.xml", rsscache.get(), &cfg, nullptr);
 	std::shared_ptr<rss_feed> feed = parser.parse();
-	rsscache->externalize_rssfeed(feed, false);
 
 	REQUIRE_NOTHROW(rsscache->do_vacuum());
 
